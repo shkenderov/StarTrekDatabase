@@ -1,0 +1,312 @@
+
+DROP TABLE mission;
+DROP TABLE person;
+DROP TABLE weapon;
+DROP TABLE ship;
+
+DROP TABLE captain_log;
+DROP TABLE crew;
+
+DROP TABLE star_system;
+DROP TABLE location;
+
+DROP TRIGGER attack_trigger;
+DROP TRIGGER mission_trigger;
+
+DROP INDEX people_name_i;
+
+DROP INDEX log_i;
+
+DROP INDEX mission_i;
+
+
+
+CREATE TABLE location (
+    id NUMBER(6) PRIMARY KEY ,
+    coord_x float(15)  NOT NULL,
+    coord_y float(15)  NOT NULL,
+    coord_z float(15)  NOT NULL    
+);
+
+CREATE TABLE star_system(
+    id NUMBER(6) PRIMARY KEY ,
+    name varchar2(30) NOT NULL,
+    description varchar2(500) DEFAULT NULL,
+    location number(6) NOT NULL,
+    FOREIGN KEY(location) REFERENCES location(id)
+);
+
+CREATE TABLE ship(
+    id number(6) PRIMARY KEY,
+    health number (3) DEFAULT 100,
+    name varchar2(30) NOT NULL,
+    warp_drive_status number(3) DEFAULT 0,
+    maintenance float(30) DEFAULT 0 ,
+    year_made number(5) NOT NULL,
+    location number(6) NOT NULL,
+    FOREIGN KEY(location) REFERENCES location(id)
+);
+
+CREATE TABLE weapon(
+    id number(6) PRIMARY KEY,
+    name varchar2(30) NOT NULL,
+    power number(10) NOT NULL,
+    accuracy number(10) NOT NULL ,
+    cost number(10) NOT NULL,
+    ship number(6) NOT NULL,
+    FOREIGN KEY(ship)REFERENCES ship(id)
+);
+
+CREATE TABLE captain_log(
+    id NUMBER(6) PRIMARY KEY ,
+    date_recorded DATE NOT NULL,
+    short_heading varchar2(30) NOT NULL,
+    text varchar2(300) DEFAULT NULL,
+    member_name varchar2(30) DEFAULT NULL,
+    member_location varchar2(30) DEFAULT NULL
+);
+
+CREATE TABLE crew(
+    id NUMBER(6) PRIMARY KEY ,
+    name varchar2(30) NOT NULL,
+    people number(5) DEFAULT 0,
+    battles_won NUMBER DEFAULT 0 ,
+    battles_lost NUMBER DEFAULT 0,
+    experience_rating number(3) DEFAULT 0
+);
+
+CREATE TABLE person(
+    id number(6) PRIMARY KEY,
+    first_name varchar2(30) NOT NULL,
+    second_name varchar2(30) NOT NULL,
+    age number(2) NOT NULL,
+    location varchar2(30) NOT NULL,
+    skill_level number(3) DEFAULT 0,
+    role varchar(30) NOT NULL,
+    crew number(6) NOT NULL,
+    FOREIGN KEY(crew) REFERENCES crew(id)
+);
+
+
+
+
+CREATE TABLE mission(
+    id number(6) PRIMARY KEY,
+    name varchar2(30) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    description varchar2(200) NOT NULL,
+    ship number(6) NOT NULL,
+    crew number(6) NOT NULL,
+    star_system number(6) NOT NULL,
+    FOREIGN KEY(star_system) REFERENCES star_system(id),
+    FOREIGN KEY(ship) REFERENCES ship(id),
+    FOREIGN KEY(crew) REFERENCES crew(id)
+);
+
+
+CREATE OR REPLACE FUNCTION member_location (member_f_name person.first_name%TYPE,member_s_name person.second_name%TYPE) 
+RETURN varchar2 IS 
+   location_m varchar2(30); 
+BEGIN 
+  SELECT p.location 
+  INTO location_m 
+  FROM person p 
+  WHERE p.first_name = member_f_name AND p.second_name=member_s_name; 
+  RETURN location_m; 
+EXCEPTION
+	WHEN NO_DATA_FOUND 
+	THEN DBMS_OUTPUT.PUT_LINE ('No data found.');
+END;
+/
+
+CREATE OR REPLACE FUNCTION coord_distance(coord_x1 FLOAT,coord_y1 FLOAT,coord_z1 FLOAT, coord_x2 FLOAT, coord_y2 FLOAT, coord_z2 FLOAT)
+RETURN FLOAT IS
+  return_val FLOAT;
+BEGIN
+  return_val := SQRT(POWER((coord_x1-coord_x2),2)+POWER((coord_y1-coord_y2),2)+POWER((coord_z1-coord_z2),2));
+  RETURN return_val;
+END;
+/
+
+
+create or replace FUNCTION star_system_distance(system_1_name varchar2, system_2_name varchar2) 
+RETURN NUMBER IS  
+    distance FLOAT; 
+    coord_x1 FLOAT; 
+    coord_y1 FLOAT; 
+    coord_z1 FLOAT; 
+    coord_x2 FLOAT; 
+    coord_y2 FLOAT; 
+    coord_z2 FLOAT; 
+BEGIN 
+    SELECT l.coord_x , l.coord_y, l.coord_z 
+    INTO coord_x1, coord_y1, coord_z1 
+    FROM location l, star_system s
+    WHERE system_1_name = s.name AND s.location=l.id; 
+    SELECT loc.coord_x , loc.coord_y, loc.coord_z 
+    INTO  coord_x2 ,coord_y2 ,coord_z2  
+    FROM location loc , star_system ss
+    WHERE system_2_name = ss.name AND ss.location=loc.id; 
+    distance := coord_distance(coord_x1, coord_y1, coord_z1, coord_x2 ,coord_y2 ,coord_z2 ); 
+    RETURN distance ; 
+EXCEPTION
+	WHEN NO_DATA_FOUND 
+	THEN DBMS_OUTPUT.PUT_LINE ('No data found.');
+END;
+/
+
+CREATE OR REPLACE FUNCTION ship_distance(ship_1_name varchar2, ship_2_name varchar2)  
+RETURN NUMBER IS   
+    distance FLOAT;  
+    coord_x1 FLOAT;  
+    coord_y1 FLOAT;  
+    coord_z1 FLOAT;  
+    coord_x2 FLOAT;  
+    coord_y2 FLOAT;  
+    coord_z2 FLOAT;  
+BEGIN  
+    SELECT l.coord_x , l.coord_y, l.coord_z  
+    INTO coord_x1, coord_y1, coord_z1  
+    FROM location l, ship s 
+    WHERE ship_1_name = s.name AND s.location=l.id;  
+    SELECT loc.coord_x , loc.coord_y, loc.coord_z  
+    INTO  coord_x2 ,coord_y2 ,coord_z2   
+    FROM location loc , ship ss 
+    WHERE ship_2_name = ss.name AND ss.location=loc.id;  
+    distance := coord_distance(coord_x1, coord_y1, coord_z1, coord_x2 ,coord_y2 ,coord_z2 );  
+    RETURN distance ;
+EXCEPTION
+	WHEN NO_DATA_FOUND 
+	THEN DBMS_OUTPUT.PUT_LINE ('No data found.');  
+END;
+/
+
+CREATE OR REPLACE FUNCTION ship_star_system_distance(ship_name varchar2, system_name varchar2)  
+RETURN NUMBER IS   
+    distance FLOAT;  
+    coord_x1 FLOAT;  
+    coord_y1 FLOAT;  
+    coord_z1 FLOAT;  
+    coord_x2 FLOAT;  
+    coord_y2 FLOAT;  
+    coord_z2 FLOAT;  
+BEGIN  
+    SELECT l.coord_x , l.coord_y, l.coord_z  
+    INTO coord_x1, coord_y1, coord_z1  
+    FROM location l, ship s 
+    WHERE ship_name = s.name AND s.location=l.id;  
+    SELECT loc.coord_x , loc.coord_y, loc.coord_z  
+    INTO  coord_x2 ,coord_y2 ,coord_z2   
+    FROM location loc , star_system st 
+    WHERE system_name = st.name AND st.location=loc.id;  
+    distance := coord_distance(coord_x1, coord_y1, coord_z1, coord_x2 ,coord_y2 ,coord_z2 );  
+    RETURN distance ;  
+EXCEPTION
+	WHEN NO_DATA_FOUND 
+	THEN DBMS_OUTPUT.PUT_LINE ('No data found.');
+
+END;
+/
+
+
+
+CREATE OR REPLACE PROCEDURE ship_attacked(ship_name IN varchar2,hit_pts IN NUMBER) IS 
+    old_health NUMBER;
+    new_health NUMBER; 
+BEGIN  
+    SELECT s.health  
+    INTO old_health 
+    FROM ship s 
+    WHERE ship_name = s.name; 
+    new_health:=old_health-hit_pts; 
+    
+    UPDATE ship 
+    SET ship.health=new_health 
+    WHERE ship.name=ship_name; 
+
+EXCEPTION
+	WHEN NO_DATA_FOUND 
+	THEN DBMS_OUTPUT.PUT_LINE ('No data found. wrong ship name.');
+END;
+/
+
+
+create or replace PROCEDURE beam(person_f_name IN varchar2,person_s_name IN varchar2,new_location IN NUMBER) IS  
+  
+BEGIN   
+    UPDATE person p
+    SET p.location=new_location  
+    WHERE p.first_name=person_f_name AND person_s_name =p.second_name ;
+
+EXCEPTION
+	WHEN NO_DATA_FOUND 
+	THEN DBMS_OUTPUT.PUT_LINE ('No data found. wrong name.');
+END;
+/
+CREATE TRIGGER attack_trigger 
+AFTER UPDATE
+OF health ON ship 
+BEGIN 
+    DBMS_OUTPUT.PUT_LINE('A SHIP HAS BEEN ATTACKED'); 
+END; 
+/
+CREATE TRIGGER mission_trigger
+AFTER INSERT ON mission
+FOR EACH ROW 
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('NEW MISSION IS ASSIGNED!');
+END;
+/
+
+CREATE OR REPLACE PROCEDURE add_cptn_log(date_created_in IN  DATE, heading_in IN  varchar2,text_in IN  varchar2,member_name_in IN  varchar2,member_location_in IN  varchar2 ) IS
+BEGIN 
+   INSERT INTO captain_log (date_recorded,short_heading,text,member_name,member_location) 
+   VALUES (date_created_in,heading_in,text_in,member_name_in,member_location_in); 
+     COMMIT;
+END; 
+
+INSERT INTO LOCATION (id,coord_x,coord_y,coord_z)
+    VALUES(1,0,0,0);
+INSERT INTO star_system(id,name,description,location)
+    VALUES(1,'solar','The Solar System formed 4.6 billion years ago from the gravitational collapse of a giant interstellar molecular cloud.Home of Earth,The third planet from the sun in the Sol system in Sector 001, Earth became one of the founders of the United Federation of Planets after the Romulan War in 2161 and today serves as its de facto capital.  ',1);
+
+INSERT INTO LOCATION (id,coord_x,coord_y,coord_z)
+    VALUES(2,20,5,7);    
+INSERT INTO SHIP(id,health,name,maintenance,year_made,warp_drive_status,location)
+    VALUES(1,100,'Enterprise',1500,2245,0,2);
+    
+INSERT INTO WEAPON(id,name,power,accuracy,cost,ship)
+    VALUES(1,'photon torpedoes',200,70,2000,1);
+
+INSERT INTO WEAPON(id,name,power,accuracy,cost,ship)
+    VALUES(2,'phaser bank',100,80,1500,1);
+    
+INSERT INTO crew(id,name,people,experience_rating,battles_won,battles_lost)
+    VALUES(1,'Kirks Crew',430,80,5,0);
+
+    
+INSERT INTO person(id,first_name,second_name,age,location,skill_level,role,crew)
+    VALUES(1,'James','Kirk',50,'main deck',100,'captain',1);
+
+INSERT INTO person(id,first_name,second_name,age,location,skill_level,role,crew)
+    VALUES (2,'Reginald','Barclay',45,'lower deck',5,'Lieutenant Junior Grade',1);
+    
+INSERT INTO LOCATION (id,coord_x,coord_y,coord_z)
+    VALUES(3,200,10,600);
+INSERT INTO star_system(id,name,description,location)
+    VALUES(2,'Romulus','One of two homeworlds of the Romulan Star Empire, orbiting the star Romulus with its twin planet of Remus, and the site where a Vulcan offshoot race eventually settled after their split over two millenia ago.',3);
+
+INSERT INTO mission(id,name,start_date,end_date,Description,ship,crew,star_system)
+    VALUES(1,'explore new land','01-JAN-2264','01-DEC-2269','Explore new land',1,1,2);
+
+
+
+CREATE INDEX people_name_i
+ON person(second_name,first_name);
+
+CREATE INDEX log_i
+ON captain_log(date_recorded);
+
+CREATE INDEX mission_i
+ON mission(name,start_date,end_date);
